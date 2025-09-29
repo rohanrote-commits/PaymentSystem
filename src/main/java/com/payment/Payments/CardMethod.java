@@ -18,10 +18,10 @@ import com.payment.helper.RequestUserContext;
 import jakarta.annotation.PostConstruct;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
+
 @AllArgsConstructor
 @Slf4j
 @Component
@@ -37,81 +37,89 @@ public class CardMethod implements PaymentMethods {
     @Override
     public ValidationReturnDto validatePaymentMethod(ValidateDto validateDto) throws UserNotFoundException {
         Optional<User> userOptional = userRepo.findUserByName(requestUserContext.getUsername());
-        if (userOptional.isPresent()) {
-            log.debug("User is present in the database");
-            User user = userOptional.get();
-
-            Optional<Card> card1 = Optional.ofNullable(cardRepo.findByCardNumber(validateDto.getCardNo()));
-            if (card1.isPresent()) {
-                Card card = card1.get();
-                if (card.getCvc().equals(validateDto.getCvc())) {
-                    log.debug("Card has correct cvc");
-                    if (card.getExp().equals(validateDto.getExp())) {
-                        log.debug("Expiry date of card has been validated");
-                        if (validateDto.getAmount() < card.getBalance()) {
-                            log.debug("Sufficient balance, can proceed in transaction");
-                            Transaction transaction = initiateTransaction(validateDto, user.getAccountId());
-                            transaction.setAmount(validateDto.getAmount());
-                            Transaction t = transactionRepo.save(transaction);
-                            int otp = otpGenerator.generate3DigitOTP();
-                            log.info("Transaction Initiated and Validation completed for user " + user.getAccountId() + "with id : " + requestUserContext.hashCode());
-                            inMemoryData.otp.put(t.getTransactionId(), otp);
-
-                            card.setBalance(card.getBalance() - validateDto.getAmount());
-                            cardRepo.save(card);
-
-                            return validationResponse(validateDto, t, otp);
-                        } else {
-                            log.error("Insufficient amount");
-                            throw new InsufficientAmmountException("Insufficient ammount for the transaction");
-                        }
-                    } else {
-                        log.error("Expiry date is wrong");
-                        throw new ResourceNotFound("Exp is wrong");
-                    }
-                } else {
-                    log.error("Card has incorrect cvc");
-                    throw new ResourceNotFound("CVC is wrong");
-                }
-            } else {
-                log.error("Card not found in database");
-                throw new ResourceNotFound("Card not found");
-            }
-
-
-        } else {
+        if (userOptional.isEmpty()) {
             log.error("Wrong username passed in header or User is not present in database");
             throw new UserNotFoundException("Wrong User name passed");
         }
+
+        User user = userOptional.get();
+        Card card = cardRepo.findByCardNumber(validateDto.getCardNo());
+
+        if (card == null) {
+            log.error("Card not found in database");
+            throw new ResourceNotFound("Card not found");
+        }
+
+        if (!card.getCvc().equals(validateDto.getCvc())) {
+            log.error("Card has incorrect cvc");
+            throw new ResourceNotFound("CVC is wrong");
+        }
+
+        log.debug("Card CVC validated");
+
+        if (!card.getExp().equals(validateDto.getExp())) {
+            log.error("Expiry date is wrong");
+            throw new ResourceNotFound("Exp is wrong");
+        }
+
+        log.debug("Card expiry validated");
+
+        if (validateDto.getAmount() >= card.getBalance()) {
+            log.error("Insufficient amount");
+            throw new InsufficientAmmountException("Insufficient amount for the transaction");
+        }
+
+        log.debug("Sufficient balance, proceeding with transaction");
+
+        Transaction transaction = initiateTransaction(validateDto, user.getAccountId());
+        transaction.setAmount(validateDto.getAmount());
+        Transaction savedTransaction = transactionRepo.save(transaction);
+
+        int otp = otpGenerator.generate3DigitOTP();
+        inMemoryData.otp.put(savedTransaction.getTransactionId(), otp);
+
+        log.info("Transaction initiated and validation completed for user {} with request id: {}",
+                user.getAccountId(), requestUserContext.hashCode());
+
+        card.setBalance(card.getBalance() - validateDto.getAmount());
+        cardRepo.save(card);
+
+        return validationResponse(validateDto, savedTransaction, otp);
     }
 
     @PostConstruct
     public void init() {
-        log.info("class of CardMethod loaded in InMemory.payments map<PaymentType,CardMethod>");
+        log.info("CardMethod loaded into InMemoryData.payments map<PaymentType, CardMethod>");
         inMemoryData.payments.put(PaymentTypes.CARD, this);
     }
 
     @Override
     public CompleteResponse completePaymentMethod(CompleteRequest completeRequest) throws UserNotFoundException {
-        if (inMemoryData.otp.containsKey(completeRequest.getTransactionId())) {
-            log.debug("Transaction is present in the database");
-            if (inMemoryData.otp.get(completeRequest.getTransactionId()).equals(completeRequest.getOtp())) {
-                log.debug("Correct otp is entered");
-                Transaction transaction = transactionRepo.findById(completeRequest.getTransactionId()).get();
-                transaction.setStatus("Completed");
-                transactionRepo.save(transaction);
-                log.info("Transaction Completed for user " + requestUserContext.getUsername() + " request id : " + requestUserContext.hashCode());
-                inMemoryData.otp.remove(completeRequest.getTransactionId());
+        Integer transactionId = completeRequest.getTransactionId();
 
-                return completeResonse(transaction);
-            } else {
-                log.error("Incorrect otp");
-
-                throw new ResourceNotFound("OTP is wrong");
-            }
-        } else {
+        if (!inMemoryData.otp.containsKey(transactionId)) {
             log.error("Incorrect transaction id/ transaction id is not present in database");
             throw new ResourceNotFound("Transaction ID is wrong");
         }
+
+        Integer expectedOtp = inMemoryData.otp.get(transactionId);
+        if (!expectedOtp.equals(completeRequest.getOtp())) {
+            log.error("Incorrect otp");
+            throw new ResourceNotFound("OTP is wrong");
+        }
+
+        log.debug("Correct OTP entered");
+
+        Transaction transaction = transactionRepo.findById(transactionId)
+                .orElseThrow(() -> new ResourceNotFound("Transaction not found"));
+
+        transaction.setStatus("Completed");
+        transactionRepo.save(transaction);
+        inMemoryData.otp.remove(transactionId);
+
+        log.info("Transaction completed for user {} with request id: {}",
+                requestUserContext.getUsername(), requestUserContext.hashCode());
+
+        return completeResonse(transaction);
     }
 }

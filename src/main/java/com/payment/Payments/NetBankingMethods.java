@@ -18,93 +18,85 @@ import com.payment.helper.InMemoryData;
 import com.payment.helper.OTPGenerator;
 import com.payment.helper.RequestUserContext;
 import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-
-import java.util.Optional;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class NetBankingMethods implements PaymentMethods {
-    @Autowired
-    RequestUserContext requestUserContext;
-    @Autowired
-    UserRepo userRepo;
 
-    @Autowired
-    OTPGenerator otpGenerator;
-
-    @Autowired
-    TransactionRepo transactionRepo;
-    @Autowired
-    InMemoryData inMemoryData;
-
-    @Autowired
-    NetBankingRepo netBankingRepo;
-
+    private final RequestUserContext requestUserContext;
+    private final UserRepo userRepo;
+    private final OTPGenerator otpGenerator;
+    private final TransactionRepo transactionRepo;
+    private final InMemoryData inMemoryData;
+    private final NetBankingRepo netBankingRepo;
 
     @Override
     public ValidationReturnDto validatePaymentMethod(ValidateDto validateDto) throws UserNotFoundException {
-        Optional<User> userOptional = userRepo.findUserByName(requestUserContext.getUsername());
-        if (userOptional.isPresent()) {
-            User user = userOptional.get();
+        User user = userRepo.findUserByName(requestUserContext.getUsername())
+                .orElseThrow(() -> new UserNotFoundException("Wrong User name passed"));
 
-            Optional<NetBanking> netBanking1 = Optional.ofNullable(netBankingRepo.findByUsername(validateDto.getUsername()));
-
-            if (netBanking1.isPresent()) {
-                NetBanking netBanking = netBanking1.get();
-                if (netBanking.getPassword().equals(validateDto.getPassword())) {
-                    if (validateDto.getAmount() < netBanking.getBalance()) {
-                        Transaction transaction = initiateTransaction(validateDto, user.getAccountId());
-                        transaction.setAmount(validateDto.getAmount());
-                        Transaction t = transactionRepo.save(transaction);
-                        int otp = otpGenerator.generate3DigitOTP();
-                        log.info("Transaction Initiated and Validation completed for user " + user.getAccountId() + "with id : " + requestUserContext.hashCode());
-                        inMemoryData.otp.put(t.getTransactionId(), otp);
-                        netBanking.setBalance(netBanking.getBalance() - validateDto.getAmount());
-                        netBankingRepo.save(netBanking);
-                        return validationResponse(validateDto, t, otp);
-                    } else {
-                        throw new InsufficientAmmountException("Insufficient funds");
-                    }
-                } else {
-                    throw new ResourceNotFound("Wrong password");
-                }
-            } else {
-                throw new ResourceNotFound("NetBanking account not found");
-            }
-
-
-        } else {
-            throw new UserNotFoundException("Wrong User name passed");
+        NetBanking netBanking = netBankingRepo.findByUsername(validateDto.getUsername());
+        if (netBanking == null) {
+            throw new ResourceNotFound("NetBanking account not found");
         }
 
+        if (!netBanking.getPassword().equals(validateDto.getPassword())) {
+            throw new ResourceNotFound("Wrong password");
+        }
+
+        if (validateDto.getAmount() >= netBanking.getBalance()) {
+            throw new InsufficientAmmountException("Insufficient funds");
+        }
+
+        Transaction transaction = initiateTransaction(validateDto, user.getAccountId());
+        transaction.setAmount(validateDto.getAmount());
+        Transaction savedTransaction = transactionRepo.save(transaction);
+
+        int otp = otpGenerator.generate3DigitOTP();
+        inMemoryData.otp.put(savedTransaction.getTransactionId(), otp);
+
+        netBanking.setBalance(netBanking.getBalance() - validateDto.getAmount());
+        netBankingRepo.save(netBanking);
+
+        log.info("Transaction initiated and validation completed for user {} with request id: {}",
+                user.getAccountId(), requestUserContext.hashCode());
+
+        return validationResponse(validateDto, savedTransaction, otp);
     }
 
     @PostConstruct
     public void init() {
-        log.info("NetBanking service inserted in map");
+        log.info("NetBanking service registered in payments map");
         inMemoryData.payments.put(PaymentTypes.NB, this);
     }
 
     @Override
     public CompleteResponse completePaymentMethod(CompleteRequest completeRequest) throws UserNotFoundException {
-        if (inMemoryData.otp.containsKey(completeRequest.getTransactionId())) {
-            if (inMemoryData.otp.get(completeRequest.getTransactionId()).equals(completeRequest.getOtp())) {
+        Integer transactionId = completeRequest.getTransactionId();
 
-                Transaction transaction = transactionRepo.findById(completeRequest.getTransactionId()).get();
-                transaction.setStatus("Completed");
-                transactionRepo.save(transaction);
-                log.info("Transaction Completed for user " + requestUserContext.getUsername() + " request id : " + requestUserContext.hashCode());
-                inMemoryData.otp.remove(completeRequest.getTransactionId());
-
-                return completeResonse(transaction);
-            } else {
-                throw new ResourceNotFound("Invalid OTP");
-            }
-        } else {
+        if (!inMemoryData.otp.containsKey(transactionId)) {
             throw new ResourceNotFound("Invalid Transaction ID");
         }
+
+        Integer expectedOtp = inMemoryData.otp.get(transactionId);
+        if (!expectedOtp.equals(completeRequest.getOtp())) {
+            throw new ResourceNotFound("Invalid OTP");
+        }
+
+        Transaction transaction = transactionRepo.findById(transactionId)
+                .orElseThrow(() -> new ResourceNotFound("Transaction not found"));
+
+        transaction.setStatus("Completed");
+        transactionRepo.save(transaction);
+        inMemoryData.otp.remove(transactionId);
+
+        log.info("Transaction completed for user {} with request id: {}",
+                requestUserContext.getUsername(), requestUserContext.hashCode());
+
+        return completeResonse(transaction);
     }
 }
