@@ -3,7 +3,7 @@ package com.payment.dto;
 import lombok.Data;
 
 @Data
-public class ValidationReturnDto {
+public class InitiateResponse {
     public long userAccountNo;
     public long transactionID;
     public int otp;

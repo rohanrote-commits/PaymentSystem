@@ -3,8 +3,6 @@ package com.payment.controller;
 import com.payment.dto.ReplaceEmailDto;
 import com.payment.dto.ReplaceMobile;
 import com.payment.entity.User;
-import com.payment.exceptions.EmailAlreadyRegistered;
-import com.payment.exceptions.MobileNumberAlreadyExist;
 import com.payment.exceptions.UserNotFoundException;
 import com.payment.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -12,7 +10,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -53,7 +50,7 @@ public class UserController {
     )
     @PutMapping("/mobile")
     public ResponseEntity<User> updateUserMobile(@RequestBody ReplaceMobile mobile)
-            throws UserNotFoundException, MobileNumberAlreadyExist {
+            throws UserNotFoundException{
         return ResponseEntity.ok(userService.replaceMobileNo(mobile));
     }
 
@@ -69,7 +66,7 @@ public class UserController {
     )
     @PutMapping("/email")
     public ResponseEntity<User> updateUserEmail(@RequestBody ReplaceEmailDto emailDto)
-            throws UserNotFoundException, EmailAlreadyRegistered {
+            throws UserNotFoundException  {
         return ResponseEntity.ok(userService.replaceEmail(emailDto));
     }
 
@@ -83,8 +80,7 @@ public class UserController {
         }
     )
     @PostMapping("/register")
-    public ResponseEntity<User> registerUser(@RequestBody User user)
-            throws MobileNumberAlreadyExist, EmailAlreadyRegistered {
+    public ResponseEntity<User> registerUser(@RequestBody User user) {
         userService.addUser(user);
         return ResponseEntity.ok(user);
     }

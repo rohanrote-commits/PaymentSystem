@@ -5,14 +5,13 @@ import com.payment.Repository.TransactionRepo;
 import com.payment.Repository.UserRepo;
 import com.payment.dto.CompleteRequest;
 import com.payment.dto.CompleteResponse;
-import com.payment.dto.ValidateDto;
-import com.payment.dto.ValidationReturnDto;
+import com.payment.dto.InitiateRequest;
+import com.payment.dto.InitiateResponse;
 import com.payment.entity.NetBanking;
 import com.payment.entity.PaymentTypes;
 import com.payment.entity.Transaction;
 import com.payment.entity.User;
-import com.payment.exceptions.InsufficientAmmountException;
-import com.payment.exceptions.ResourceNotFound;
+import com.payment.exceptions.PaymentServiceException;
 import com.payment.exceptions.UserNotFoundException;
 import com.payment.helper.InMemoryData;
 import com.payment.helper.OTPGenerator;
@@ -20,6 +19,7 @@ import com.payment.helper.RequestUserContext;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
 @Slf4j
@@ -35,37 +35,37 @@ public class NetBankingMethods implements PaymentMethods {
     private final NetBankingRepo netBankingRepo;
 
     @Override
-    public ValidationReturnDto validatePaymentMethod(ValidateDto validateDto) throws UserNotFoundException {
+    public InitiateResponse initiate(InitiateRequest initiateRequest) throws UserNotFoundException, PaymentServiceException {
         User user = userRepo.findUserByName(requestUserContext.getUsername())
                 .orElseThrow(() -> new UserNotFoundException("Wrong User name passed"));
 
-        NetBanking netBanking = netBankingRepo.findByUsername(validateDto.getUsername());
+        NetBanking netBanking = netBankingRepo.findByUsername(initiateRequest.getUsername());
         if (netBanking == null) {
-            throw new ResourceNotFound("NetBanking account not found");
+            throw new PaymentServiceException("Net Banking account not found", HttpStatus.NOT_FOUND);
         }
 
-        if (!netBanking.getPassword().equals(validateDto.getPassword())) {
-            throw new ResourceNotFound("Wrong password");
+        if (!netBanking.getPassword().equals(initiateRequest.getPassword())) {
+            throw new PaymentServiceException("Invalid password", HttpStatus.BAD_REQUEST);
         }
 
-        if (validateDto.getAmount() >= netBanking.getBalance()) {
-            throw new InsufficientAmmountException("Insufficient funds");
+        if (initiateRequest.getAmount() >= netBanking.getBalance()) {
+            throw new PaymentServiceException("Insufficient balance", HttpStatus.BAD_REQUEST);
         }
 
-        Transaction transaction = initiateTransaction(validateDto, user.getAccountId());
-        transaction.setAmount(validateDto.getAmount());
+        Transaction transaction = createTransaction(initiateRequest, user.getAccountId());
+        transaction.setAmount(initiateRequest.getAmount());
         Transaction savedTransaction = transactionRepo.save(transaction);
 
         int otp = otpGenerator.generate3DigitOTP();
         inMemoryData.otp.put(savedTransaction.getTransactionId(), otp);
 
-        netBanking.setBalance(netBanking.getBalance() - validateDto.getAmount());
+        netBanking.setBalance(netBanking.getBalance() - initiateRequest.getAmount());
         netBankingRepo.save(netBanking);
 
         log.info("Transaction initiated and validation completed for user {} with request id: {}",
                 user.getAccountId(), requestUserContext.hashCode());
 
-        return validationResponse(validateDto, savedTransaction, otp);
+        return validationResponse(initiateRequest, savedTransaction, otp);
     }
 
     @PostConstruct
@@ -75,20 +75,20 @@ public class NetBankingMethods implements PaymentMethods {
     }
 
     @Override
-    public CompleteResponse completePaymentMethod(CompleteRequest completeRequest) throws UserNotFoundException {
+    public CompleteResponse completePaymentMethod(CompleteRequest completeRequest) throws UserNotFoundException, PaymentServiceException {
         Integer transactionId = completeRequest.getTransactionId();
 
         if (!inMemoryData.otp.containsKey(transactionId)) {
-            throw new ResourceNotFound("Invalid Transaction ID");
+            throw new PaymentServiceException("Invalid Transaction Id entered",HttpStatus.NOT_FOUND);
         }
 
         Integer expectedOtp = inMemoryData.otp.get(transactionId);
         if (!expectedOtp.equals(completeRequest.getOtp())) {
-            throw new ResourceNotFound("Invalid OTP");
+            throw new PaymentServiceException("Incorrect otp", HttpStatus.BAD_REQUEST);
         }
 
         Transaction transaction = transactionRepo.findById(transactionId)
-                .orElseThrow(() -> new ResourceNotFound("Transaction not found"));
+                .orElseThrow(() -> new PaymentServiceException("Invalid Transaction ID", HttpStatus.BAD_REQUEST));
 
         transaction.setStatus("Completed");
         transactionRepo.save(transaction);

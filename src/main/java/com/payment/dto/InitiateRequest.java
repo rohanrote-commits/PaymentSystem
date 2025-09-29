@@ -4,7 +4,7 @@ import com.payment.entity.PaymentTypes;
 import lombok.Data;
 
 @Data
-public class ValidateDto {
+public class InitiateRequest {
     // card
     private Long cardNo;
     private String cvc;

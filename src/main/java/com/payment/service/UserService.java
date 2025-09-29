@@ -4,11 +4,7 @@ package com.payment.service;
 import com.payment.Repository.UserRepo;
 import com.payment.dto.ReplaceEmailDto;
 import com.payment.dto.ReplaceMobile;
-import com.payment.entity.Card;
-import com.payment.entity.NetBanking;
 import com.payment.entity.User;
-import com.payment.exceptions.EmailAlreadyRegistered;
-import com.payment.exceptions.MobileNumberAlreadyExist;
 import com.payment.exceptions.UserNotFoundException;
 
 import org.springframework.beans.factory.annotation.Autowired;

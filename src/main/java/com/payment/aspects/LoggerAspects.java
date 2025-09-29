@@ -16,7 +16,7 @@ public class LoggerAspects {
 
     private final RequestUserContext requestUserContext;
 
-    @Around("execution(* com.payment.Payments.CardMethod.*(..))")
+    @Around("execution(* com.payment.Payments.CardMethod.createTransaction(..))")
     public Object logAroundPaymentMethods(ProceedingJoinPoint joinPoint) throws Throwable {
         String username = requestUserContext.getUsername();
         log.info("User: {} | Before method execution: {}", username, joinPoint.getSignature());

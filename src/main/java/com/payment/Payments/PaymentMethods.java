@@ -2,48 +2,46 @@ package com.payment.Payments;
 
 import com.payment.dto.CompleteRequest;
 import com.payment.dto.CompleteResponse;
-import com.payment.dto.ValidateDto;
-import com.payment.dto.ValidationReturnDto;
-import com.payment.entity.PaymentTypes;
+import com.payment.dto.InitiateRequest;
+import com.payment.dto.InitiateResponse;
 import com.payment.entity.Transaction;
+import com.payment.exceptions.PaymentServiceException;
 import com.payment.exceptions.UserNotFoundException;
-import com.payment.helper.RequestUserContext;
-import org.springframework.beans.factory.annotation.Autowired;
 
 public interface PaymentMethods {
 
-    ValidationReturnDto validatePaymentMethod(ValidateDto validateDto) throws UserNotFoundException;
+    InitiateResponse initiate(InitiateRequest initiateRequest) throws UserNotFoundException, PaymentServiceException;
 
-    CompleteResponse completePaymentMethod(CompleteRequest completeRequest) throws UserNotFoundException;
+    CompleteResponse completePaymentMethod(CompleteRequest completeRequest) throws UserNotFoundException, PaymentServiceException;
 
-    default Transaction initiateTransaction(ValidateDto validateDto, long id) {
+    default Transaction createTransaction(InitiateRequest initiateRequest, long id) {
 
         Transaction transaction = new Transaction();
-        transaction.setTransactionType(validateDto.getType());
+        transaction.setTransactionType(initiateRequest.getType());
         transaction.setAccountId(id);
         transaction.setStatus("Initiated");
-        transaction.setAmount(validateDto.getAmount());
+        transaction.setAmount(initiateRequest.getAmount());
         return transaction;
     }
 
-    default ValidationReturnDto validationResponse(ValidateDto validateDto, Transaction transaction, int otp) throws UserNotFoundException {
-        ValidationReturnDto validationReturnDto = new ValidationReturnDto();
-        validationReturnDto.setAmount(validateDto.getAmount());
-        validationReturnDto.setTransactionID(transaction.getTransactionId());
-        validationReturnDto.setUserAccountNo(transaction.getAccountId());
-        validationReturnDto.setOtp(otp);
+    default InitiateResponse validationResponse(InitiateRequest initiateRequest, Transaction transaction, int otp) throws UserNotFoundException {
+        InitiateResponse initiateResponse = new InitiateResponse();
+        initiateResponse.setAmount(initiateRequest.getAmount());
+        initiateResponse.setTransactionID(transaction.getTransactionId());
+        initiateResponse.setUserAccountNo(transaction.getAccountId());
+        initiateResponse.setOtp(otp);
 
-        return validationReturnDto;
+        return initiateResponse;
 
     }
 
-    default ValidationReturnDto validationResponse(ValidateDto validateDto, Transaction transaction) throws UserNotFoundException {
-        ValidationReturnDto validationReturnDto = new ValidationReturnDto();
-        validationReturnDto.setAmount(validateDto.getAmount());
-        validationReturnDto.setTransactionID(transaction.getTransactionId());
-        validationReturnDto.setUserAccountNo(transaction.getAccountId());
+    default InitiateResponse validationResponse(InitiateRequest initiateRequest, Transaction transaction) throws UserNotFoundException {
+        InitiateResponse initiateResponse = new InitiateResponse();
+        initiateResponse.setAmount(initiateRequest.getAmount());
+        initiateResponse.setTransactionID(transaction.getTransactionId());
+        initiateResponse.setUserAccountNo(transaction.getAccountId());
 
-        return validationReturnDto;
+        return initiateResponse;
 
     }
 

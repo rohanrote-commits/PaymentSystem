@@ -2,8 +2,8 @@ package com.payment.controller;
 
 import com.payment.dto.CompleteRequest;
 import com.payment.dto.CompleteResponse;
-import com.payment.dto.ValidateDto;
-import com.payment.dto.ValidationReturnDto;
+import com.payment.dto.InitiateRequest;
+import com.payment.dto.InitiateResponse;
 import com.payment.exceptions.UserNotFoundException;
 import com.payment.service.PaymentService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -14,7 +14,6 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -35,7 +34,7 @@ public class Payment {
             description = "Validates payment details and initiates the transaction",
             responses = {
                     @ApiResponse(responseCode = "200", description = "Validation successful",
-                            content = @Content(schema = @Schema(implementation = ValidationReturnDto.class))),
+                            content = @Content(schema = @Schema(implementation = InitiateResponse.class))),
                     @ApiResponse(responseCode = "404", description = "User not found")
             }
     )
@@ -47,8 +46,8 @@ public class Payment {
                     in = ParameterIn.HEADER
             )
     })
-    public ResponseEntity<ValidationReturnDto> initiate(@RequestBody ValidateDto validateDto) throws UserNotFoundException {
-        return ResponseEntity.ok(paymentService.initiate(validateDto));
+    public ResponseEntity<InitiateResponse> initiate(@RequestBody InitiateRequest initiateRequest) throws UserNotFoundException {
+        return ResponseEntity.ok(paymentService.initiate(initiateRequest));
     }
 
 

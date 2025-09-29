@@ -4,9 +4,7 @@ import lombok.Data;
 import org.springframework.context.annotation.Scope;
 import org.springframework.context.annotation.ScopedProxyMode;
 import org.springframework.stereotype.Component;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.context.WebApplicationContext;
-import org.springframework.web.context.annotation.RequestScope;
 
 
 @Data

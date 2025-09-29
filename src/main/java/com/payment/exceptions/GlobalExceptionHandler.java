@@ -12,23 +12,8 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ex.getMessage());
     }
 
-    @ExceptionHandler(MobileNumberAlreadyExist.class)
-    public ResponseEntity<String> mobileNumberExist(MobileNumberAlreadyExist ex){
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(ex.getMessage());
+    @ExceptionHandler(PaymentServiceException.class)
+ public ResponseEntity<String> handlePaymentServiceException(PaymentServiceException ex){
+        return ResponseEntity.status(ex.httpStatus).body(ex.getMessage());
     }
-
-    @ExceptionHandler(EmailAlreadyRegistered.class)
-    public ResponseEntity<String> emailAlreadyRegistered(EmailAlreadyRegistered ex){
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(ex.getMessage());
-    }
-
-    @ExceptionHandler(InsufficientAmmountException.class)
-    public ResponseEntity<String> handleException(Exception ex){
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ex.getMessage());
-    }
-    @ExceptionHandler(ResourceNotFound.class)
-    public ResponseEntity<String> handleResourceNotFound(ResourceNotFound ex){
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ex.getMessage());
-    }
-
 }
